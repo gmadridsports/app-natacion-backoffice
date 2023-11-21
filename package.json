@@ -1,0 +1,18 @@
+{
+  "name": "gmadrid_natacion_srv",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "author": "Matteo Bertamini <matteo@bertamini.net>",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.36.0",
+    "firebase-admin": "^11.10.1",
+    "inquirer": "^9.2.12",
+    "inquirer-datepicker-prompt": "^0.4.3"
+  },
+  "scripts": {
+    "start": "GOOGLE_APPLICATION_CREDENTIALS=$(cat ./dev/serviceAccountKeyPath) node src/index.js",
+    "setup": "node src/setup.js"
+  },
+  "type": "module"
+}
