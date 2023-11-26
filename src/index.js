@@ -142,36 +142,57 @@ async function uploadTrainingWeek() {
     endDate.setDate(endDate.getDate() + 6);
 
     console.log('uploading...');
+    const fileToUpload = fs.readFileSync(trainingWeekFilePath);
+    const {uploaddata, uploadError} = await supabase
+        .storage
+        .from('trainings')
+        .upload(`general/${startDate.toISOString().split('T')[0]}.pdf`, fileToUpload, {
+            cacheControl: '3600',
+            upsert: true
+        });
+    if (uploadError) {
+        console.error('An error occured while uploading' + uploadError);
+        process.exit(1);
+    }
+
+
+    //
+    // NOTIFICATION
+    //
     const startDateMonth = capitalize(startDate.toLocaleString("es-ES", {month: "short"}));
     const endDateMonth = capitalize(endDate.toLocaleString("es-ES", {month: "short"}));
 
     const trainingWeekName = (startDateMonth === endDateMonth) ? `${startDate.getDate()}-${endDate.getDate()} ${startDateMonth}` : `${startDate.getDate()} ${startDateMonth} - ${endDate.getDate()} ${endDateMonth}`;
 
-    const { data: profileData, error: profileError } = await supabase
+    const {data: profileData, error: profileError} = await supabase
         .from('profiles')
         .select('id')
         .eq('membership_level', 'member');
 
     const ids = profileData.map((profile) => profile.id);
 
-    const { data, error } = await supabase
+    const {data, error} = await supabase
         .from('notification_tokens')
         .select('token')
         .in('user_id', ids);
 
-    //
-    // NOTIFICATION
-    //
     console.log('Sending the training notification...');
     console.log(`We got ${data.length} active sessions`);
-    for (const token of data) {
-        await getMessaging().send({
-            notification: {
-                title: 'Entreno disponible',
-                body: `Semana ${trainingWeekName} disponible 🏊`
-            },
-            token: token.notification_token
-        });
+    for (const {token} of data) {
+        if (token === null)
+            continue;
+
+        try {
+            await getMessaging().send({
+                notification: {
+                    title: 'Entreno disponible',
+                    body: `Semana ${trainingWeekName} disponible 🏊`
+                },
+                token
+            });
+        } catch (e) {
+        }
+
         process.stdout.write(`.`);
     }
     console.log('');
