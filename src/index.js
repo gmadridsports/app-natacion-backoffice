@@ -136,8 +136,6 @@ async function uploadTrainingWeek() {
             }
         ]);
     const {startTrainingDate, trainingWeekFilePath} = answer;
-
-    const startDate = new Date(startTrainingDate);
     const endDate = new Date(startTrainingDate);
     endDate.setDate(endDate.getDate() + 6);
 
@@ -146,7 +144,7 @@ async function uploadTrainingWeek() {
     const {uploaddata, uploadError} = await supabase
         .storage
         .from('trainings')
-        .upload(`general/${startDate.toISOString().split('T')[0]}.pdf`, fileToUpload, {
+        .upload(`general/${startTrainingDate.getFullYear()}-${startTrainingDate.getMonth()}-${startTrainingDate.getDay()}.pdf`, fileToUpload, {
             cacheControl: '3600',
             upsert: true
         });
