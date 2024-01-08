@@ -36,7 +36,7 @@ while (answer?.action !== 'Exit') {
                     type: 'list',
                     name: 'action',
                     message: "What do you wanna do: ",
-                    choices: ['Enable a user', 'Upload a training week', new inquirer.Separator(), 'Exit'],
+                    choices: ['Enable a user', 'Upload a training week', 'Send a notification', new inquirer.Separator(), 'Exit'],
                 }
             ]
         );
@@ -48,6 +48,8 @@ while (answer?.action !== 'Exit') {
         case 'Upload a training week':
             await uploadTrainingWeek();
             break;
+	case 'Send a notification':
+	    await sendNotification();
         default:
             process.exit(0);
     }
@@ -105,6 +107,87 @@ function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+async function sendNotification() {
+    const answer = await inquirer
+        .prompt([
+            {
+                type: 'input',
+                name: 'title',
+                message: "Title for the notification",
+                validate(value) {
+			if (value === '') {
+				return 'enter a valid title';
+			}
+                    return true;
+                },
+            },
+            {
+                type: 'input',
+                name: 'body',
+                message: "Body for the notification",
+                validate(value) {
+			if (value === '') {
+				return 'enter a valid body';
+			}
+                    return true;
+                },
+            },
+            {
+                type: 'input',
+                name: 'appRoute',
+                message: "App route",
+                validate(value) {
+			const match = /\/([a-zA-Z0-9]+\/{0,1})+([^\/])$/;
+			if (value.match(match) === false && value !== '') {
+				return 'enter a valid path';
+			}
+                    return true;
+                },
+            },
+        ]);
+	const {title, body, appRoute} = answer;
+
+
+    const {data: profileData, error: profileError} = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('membership_level', 'member');
+
+    const ids = profileData.map((profile) => profile.id);
+
+    const {data, error} = await supabase
+        .from('notification_tokens')
+        .select('token')
+        .in('user_id', ids);
+
+    console.log('Sending the notification...');
+    console.log(`We got ${data.length} active sessions`);
+    for (const {token} of data) {
+        if (token === null)
+            continue;
+
+        try {
+            await getMessaging().send({
+                notification: {
+                    title,
+                    body,
+                },
+	        data: {
+                    appRoute
+		},
+                token
+            });
+        } catch (e) {
+        }
+
+        process.stdout.write(`.`);
+    }
+    console.log('');
+
+    console.log('Notification sent! 🎉');
+
+}
+
 async function uploadTrainingWeek() {
     const answer = await inquirer
         .prompt([
@@ -132,19 +215,20 @@ async function uploadTrainingWeek() {
                 type: 'datetime',
                 name: 'startTrainingDate',
                 message: 'When is the first training week day?',
-                format: ['d', '/', 'm', '/', 'yyyy']
+                format: ['dd', '/', 'mm', '/', 'yyyy']
             }
         ]);
     const {startTrainingDate, trainingWeekFilePath} = answer;
-    const endDate = new Date(startTrainingDate);
-    endDate.setDate(endDate.getDate() + 6);
 
-    console.log('uploading...');
+    const startDate = new Date(startTrainingDate);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 4);
+        
     const fileToUpload = fs.readFileSync(trainingWeekFilePath);
     const {uploaddata, uploadError} = await supabase
         .storage
         .from('trainings')
-        .upload(`general/${startTrainingDate.getFullYear()}-${startTrainingDate.getMonth()}-${startTrainingDate.getDay()}.pdf`, fileToUpload, {
+        .upload(`general/${startTrainingDate.getFullYear()}-${("0" + (startTrainingDate.getMonth() + 1)).slice(-2)}-${("0" + startTrainingDate.getDate()).slice(-2)}.pdf`, fileToUpload, {
             cacheControl: '3600',
             upsert: true
         });
@@ -153,7 +237,6 @@ async function uploadTrainingWeek() {
         process.exit(1);
     }
 
-
     //
     // NOTIFICATION
     //
@@ -161,7 +244,6 @@ async function uploadTrainingWeek() {
     const endDateMonth = capitalize(endDate.toLocaleString("es-ES", {month: "short"}));
 
     const trainingWeekName = (startDateMonth === endDateMonth) ? `${startDate.getDate()}-${endDate.getDate()} ${startDateMonth}` : `${startDate.getDate()} ${startDateMonth} - ${endDate.getDate()} ${endDateMonth}`;
-
     const {data: profileData, error: profileError} = await supabase
         .from('profiles')
         .select('id')
@@ -184,8 +266,11 @@ async function uploadTrainingWeek() {
             await getMessaging().send({
                 notification: {
                     title: 'Entreno disponible',
-                    body: `Semana ${trainingWeekName} disponible 🏊`
+                    body: `Semana ${trainingWeekName} disponible 🏊`,
                 },
+	        data: {
+                    appRoute: '/member-app/training-calendar'
+		},
                 token
             });
         } catch (e) {
